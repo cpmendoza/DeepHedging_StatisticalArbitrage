@@ -1,0 +1,26 @@
+simulation:
+    model : 'Black-Scholes'
+    #Model considered to simulate the market dynamics {'GARCH','GJR-GARCH','Black-Scholes'}
+    number_simulations: 500000
+    #Number of paths to simulate
+    number_days: 63
+    #Option maturity {21,63,126} 
+    vol_lower_bound: 0.01
+    #Minimum threshold of 0.01 is applied to the volatility surface
+    size_step: 1/252
+    #Rebalancing frequency (Our approach consider daily rebalancing based on 252 business days)
+    r: 0.026623194
+    #Annualized continuously compounded risk-free rate
+    q: 0.01772245
+    #Annualized underlying asset dividend yield
+    stock_price: 100
+    #Initial value of the stock price
+    strike : 100     
+    #Strike price
+    seed: 43
+    #seed to ensure replicability
+
+
+
+
+
