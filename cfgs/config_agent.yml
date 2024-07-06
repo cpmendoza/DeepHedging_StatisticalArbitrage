@@ -12,7 +12,7 @@ agent:
     #First layer of parameters 
     state_space: "Reduced_1"               
     #State space considered in the RL framework {"Full","Reduced_1","Reduced_2"}
-    cash_constraint: False                
+    cash_constraint: True               
     #Boolean variable to include cash constraints {True,False}
     constraint_max: 100                  
     #Cash constraint limit (positive number)
@@ -32,7 +32,7 @@ agent:
     #Proportional transaction cost [0,5/10000,5/1000,1/100]
     riskaversion: 0.95                 
     #CVaR confidence level (0,1)
-    epochs: 5                    
+    epochs: 50                    
     #Number of epochs, training iterations 
 
     # Third layer of parameters
