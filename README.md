@@ -74,7 +74,7 @@ python -m pipeline
 ├── cfgs                        <- Configuration files for environment simulation and RL model parameters.
 │
 ├── data
-│   ├── raw                     <- Historical estimated parameters of the S\&P 500 index.
+│   ├── raw                     <- Historical estimated parameters of the S&P 500 index.
 │   ├── interim                 <- Temporary data used during simulation.
 │   ├── processed               <- Simulated markets dynamics.
 │   └── results                 <- Deep hedging strategies (RL sgents output).

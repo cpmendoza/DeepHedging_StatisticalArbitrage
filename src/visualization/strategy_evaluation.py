@@ -19,96 +19,45 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
+import statsmodels.api as sm
+
+from statsmodels.stats.diagnostic import het_breuschpagan, acorr_breusch_godfrey
+from statsmodels.stats.stattools import durbin_watson
+from scipy.stats import shapiro
 from scipy import stats
 
 
 class strategy_hedging_valuation(object):
     
-    """ Class to compute hedging error of self-financing strategies
-    Inputs:
-    transacion_cost : Proportional transaction cost [0,1]
-    r               : Annualized continuous risk-free rate
-    q               : Annualized continuous dividend yield
-    isput           : Put or Call: {True,False}
+    """Class to implement the delta-hedging framework
+    
+    Parameters
+    ----------
+    Time_steps : int, optional
+    number_sumlations: int, optional
+        
     """
     
-    def __init__(self, transaction_cost = 0, isput=False, r = 0.009713920000000001, q = 0.01543706, hedging_strategy = "one_instrument",):
+    def __init__(self, hedging_strategy = "one_instrument", transaction_cost = 0, isput=False, q = 0.01772245, r = 0.026623194):
 
         # Parameters
-        self.r = r                                    
-        self.q = q                                  
+        self.r = r                                    #Interest rate as a constant
+        self.q = q                                    #Dividend yield
         self.transaction_cost = transaction_cost
         self.hedging_strategy = hedging_strategy
         self.isput = isput
         
-    #Function to compute option prices 
-    def option_price(self, S, K, TT, sigma):
-
-        """Function that provides the initial price of a portfolio of options
-
-            Parameters
-            ----------
-            Price_mat : Underlying asset price
-            K         : Strike of the option
-            TT        : Time-to-maturity
-            sigma     : volatility
-            isput     : Parameter to determine Put or Call
-            r         : annualized risk-free rate
-            q         : annualized dividend yield
-
-            Returns
-            -------
-            price     : Option price of all paths at time zero
-        """
-        d1 = (np.log(S/K)+(self.r-self.q+(sigma**2)/2)*TT)/(sigma*np.sqrt(TT))
-        d2 = d1-sigma*np.sqrt(TT)
-        if self.isput==False:
-            price = S*np.exp(-self.q*TT)*norm.cdf(d1)-K*np.exp(-self.r*TT)*norm.cdf(d2)
-        else:
-            price = K*np.exp(-self.r*TT)*norm.cdf(-d2)-S*np.exp(-self.q*TT)*norm.cdf(-d1)
-        
-        return price
     
-    def hedging_error_vector(self, K, Stock_paths, implied_volatility_simulation_1, position_underlying_asset, Hedge_option_price_path = None,  position_hedging_option = None, close_limit_days = 5):
-
-        """
-        Input:
-        K                                   : Strike of the option
-        Stock_paths                         : Underlying asset price
-        implied_volatility_simulation_1     : Implied volatility of the underlying
-        position_underlying_asset           : Vector of the positions in the underlying
-        Hedge_option_price_path             : Hedging option price path 
-        position_hedging_option             : Vector of the positions in another hedging instruments
-        close_limit_days                    : Number of days before maturity to close the position
-
-        Output:
-        hedging_portfolio                   : Portfolio value per path
-        hedging_error                       : Hedging error per time-step for all paths
-        hedging_error_limit                 : Vector with hedging error at time we liquidate the position
-        cost_limit                          : Final transaction cost of the strategy
-        option_price                        : Option price matrix
-
-        """
+    def hedging_error_vector(self, K, Stock_paths, option_price, position_underlying_asset):
         
         #General values
         time_steps = Stock_paths.shape[1]-1
         number_simulations = Stock_paths.shape[0]
-        limit = time_steps-close_limit_days
-
-        ############# CHANGE FOR GENERAL CASE RIHT HERE ##############
-        ##############################################################
-
-        TT = time_steps/252 #for general daily hedging (63/252 or 252/252)
-        h  = TT / time_steps
-        time_to_maturity = np.array(sorted((np.arange(time_steps)+1),reverse=True))*h
-        option_price = self.option_price(Stock_paths[:,:-1], K, time_to_maturity, implied_volatility_simulation_1)
         
         #Hedging portfolio
         hedging_portfolio = np.zeros([number_simulations,(time_steps+1)])
-        hedging_error = np.zeros([number_simulations,(time_steps+1)])
         cost_matrix = np.zeros([number_simulations,(time_steps)])
-        hedging_portfolio[:,0] = option_price[:,0]
+        hedging_portfolio[:,0] = option_price
         
         if self.isput==False:
             payoff = np.maximum(Stock_paths[:,time_steps]-K,0)
@@ -126,227 +75,182 @@ class strategy_hedging_valuation(object):
                     cost_matrix[:,0] = cost
                 else:
                     cost = np.abs(self.transaction_cost*Stock_paths[:,time_step]*(position_underlying_asset[:,time_step]-position_underlying_asset[:,time_step-1]))
-                    cost_matrix[:,time_step] = cost_matrix[:,time_step-1] + cost #*np.exp((-1)*self.r*h)
-
-                phi_0 = hedging_portfolio[:,time_step] - Stock_paths[:,time_step]*position_underlying_asset[:,time_step] - cost
-                hedging_portfolio[:,(time_step+1)] = phi_0*np.exp(self.r*h) + position_underlying_asset[:,time_step]*Stock_paths[:,(time_step+1)]*np.exp(self.q*h)
-            
-            #P&L Computation
-            hedging_error[:,:-1] = hedging_portfolio[:,:-1]-option_price
-            hedging_error[:,time_steps] = hedging_portfolio[:,time_steps] - payoff
-            hedging_error_limit = hedging_error[:,limit]
-            cost_limit = cost_matrix[:,limit-1]
-            
-        elif self.hedging_strategy == "two_instruments":
-            
-            #Computing hedging errors with two hedging instruments
-            for time_step in range(time_steps):
-            
-                 #Transacition cost computation
-                if time_step == 0:
-                    cost = np.abs(Stock_paths[:,time_step]*position_underlying_asset[:,time_step]*self.transaction_cost) + np.abs(self.transaction_cost*Hedge_option_price_path[:,(time_step)]*position_hedging_option[:,time_step])
-                    cost_matrix[:,0] = cost
-                else:
-                    cost = np.abs(self.transaction_cost*Stock_paths[:,time_step]*(position_underlying_asset[:,time_step] - position_underlying_asset[:,time_step-1])) + np.abs(self.transaction_cost*Hedge_option_price_path[:,(time_step)]*(position_hedging_option[:,time_step]-position_hedging_option[:,time_step-1]))
                     cost_matrix[:,time_step] = cost_matrix[:,time_step-1] + cost*np.exp((-1)*self.q*(time_step/252))
 
-                phi_0 = hedging_portfolio[:,time_step] - Stock_paths[:,time_step]*position_underlying_asset[:,time_step] - Hedge_option_price_path[:,(time_step)]*position_hedging_option[:,time_step] - cost
-                hedging_portfolio[:,(time_step+1)] = phi_0*np.exp(self.r*h) + position_underlying_asset[:,time_step]*Stock_paths[:,(time_step+1)]*np.exp(self.q*h) + position_hedging_option[:,time_step]*Hedge_option_price_path[:,(time_step+1)]
+                phi_0 = hedging_portfolio[:,time_step] - Stock_paths[:,time_step]*position_underlying_asset[:,time_step] - cost
+                hedging_portfolio[:,(time_step+1)] = phi_0*np.exp(self.r/252) + position_underlying_asset[:,time_step]*Stock_paths[:,(time_step+1)]*np.exp(self.q/252)
             
             #P&L Computation
-            hedging_error[:,:-1] = hedging_portfolio[:,:-1]-option_price
-            hedging_error[:,time_steps] = hedging_portfolio[:,time_steps] - payoff
-            hedging_error_limit = hedging_error[:,limit]
-            cost_limit = cost_matrix[:,limit-1]
+            hedging_error_limit = hedging_portfolio[:,time_steps] - payoff
+            cost_limit = cost_matrix[:,-1]
  
-        return hedging_portfolio, hedging_error, hedging_error_limit, cost_limit, option_price
+        return hedging_error_limit, cost_limit, hedging_portfolio
     
+def statistics_2(hedging_err):
 
-def loss_functions(hedging_err):
-    """
-    Input:
-    hedging_err   : Vector of hedging errors
-
-    Output:
-    loss          : Loss function values
-
-    """
     "Mean"
     loss = np.mean(hedging_err)
-    "CVaR - 95"
-    loss = np.append(loss,np.mean(np.sort(hedging_err)[int(0.95*hedging_err.shape[0]):]))
-    "CVaR - 99"
-    loss = np.append(loss,np.mean(np.sort(hedging_err)[int(0.99*hedging_err.shape[0]):]))
-    "MSE"
-    loss = np.append(loss,np.mean(np.square(hedging_err)))
-    "SMSE"
-    loss = np.append(loss,np.mean(np.square(np.where(hedging_err>0,hedging_err,0))))
-        
+    for x in [0.5,0.75,0.9,0.95,0.99]:
+        loss = np.append(loss,np.mean(np.sort(hedging_err)[int(x*hedging_err.shape[0]):]))
+    #np.append(loss,np.mean(np.sort(hedging_err)[int(0.95*hedging_err.shape[0]):]) + np.sqrt(np.mean(np.square(hedging_err))))
+
     return(loss)
-    
-def statistics(hedging_error):
-    """
-    Input:
-    hedging_err   : Vector of hedging errors
 
-    Output:
-    statistics    : Distributional statistics
+def regression_approach(deltas,deep_hedging):
+    correlation_time = []
+    results = []
+    for t in range(1,63):
+        x_1 = deltas[:,t]
+        y_1 = deep_hedging[:,t]#-deltas[:,t]
+        correlation, p_value = stats.spearmanr(x_1, y_1)
+        correlation_time.append(correlation)
 
-    """
-    percentiles = np.percentile(hedging_error, [10,20,30,40,50,60,70,80,90])
-    x = stats.describe(hedging_error)
-    statistics = np.insert(percentiles, 0, [x[2],np.sqrt(x[3])], axis=None)
-    return(statistics)
+        # Remove NaN values
+        cleaned_data = [x for x in correlation_time if not np.isnan(x)]
 
-def load_standard_datasets(maturity, sigma):
-    
-    """Function that loads the sets to create the training set
+        # Compute mean
+        mean_value = np.mean(cleaned_data)
 
-        Parameters
-        ----------
-        maturity     : time to maturity of the options
+        # Add intercept to X
+        X = sm.add_constant(x_1)
 
-        Returns
-        -------
-        Price_mat    : Matrix of underlying asset prices
-        S            : Transposed matrix of the underlying asset price
-        betas        : Coefficients of the IV surface 
-        h_simulation : Volatility of the underlying asset
+        # Fit the linear regression model
+        model = sm.OLS(y_1.reshape(-1,1), X).fit()
 
-      """
-    if sigma is None:
-        # 1) Load datasets to train and test deep hedging algorithm (Simulated paths, Betas IV, volatilities)
-        # 1.1) matrix of simulated stock prices
-        Price_mat    = np.load(os.path.join(f"Stock_paths__random_f_{maturity}.npy"))
-        S            = Price_mat
-        # 1.2) IV coefficients
-        betas        = np.load(os.path.join(f"Betas_simulation__random_f_{maturity}.npy"))
-        # 1.3) Volatility
-        h_simulation = np.load(os.path.join(f"H_simulation__random_f_{maturity}.npy"))
-        returns      = np.load(os.path.join(f"Returns_random__random_f_{maturity}.npy"))
-    else:
-        # 1) Load datasets to train and test deep hedging algorithm (Simulated paths, Betas IV, volatilities)
-        # 1.1) matrix of simulated stock prices
-        Price_mat    = np.load(os.path.join(f"Stock_paths__random_b_{maturity}.npy"))
-        S            = Price_mat
-        # 1.2) IV coefficients
-        betas        = None
-        # 1.3) Volatility
-        h_simulation = None
-        returns = np.log(Price_mat[:,1:]/Price_mat[:,:-1])
+        # Extracting confidence intervals
+        conf = model.conf_int()
+
+        # Separating the lower and upper limits
+        lower_limits = conf[:, 0]
+        upper_limits = conf[:, 1]
+
+        coefficients = model.params
+        r_squared = model.rsquared
+        p_value = model.f_pvalue
+        residuals_mean = model.resid.mean()
+
+        # Compute the Durbin-Watson statistic
+        dw_statistic = durbin_watson(model.resid)
+
+        # Perform Breusch-Pagan test for heteroscedasticity
+        bp_test = het_breuschpagan(model.resid, model.model.exog)
+
+        # bp_test returns a tuple with Lagrange multiplier statistic, p-value, f-value, and f p-value
+        bp_test_stat, bp_test_pvalue, _, _ = bp_test
+
+        # Perform Shapiro-Wilk test for normality of residuals
+        shapiro_test_stat, shapiro_test_pvalue = shapiro(model.resid)
+
+        result = {
+            'Coefficient_0': coefficients[0],
+            'Coefficient_1': coefficients[1],
+            'Coefficient_0_inf': lower_limits[0],
+            'Coefficient_0_sup': upper_limits[0],
+            'Coefficient_1_inf': lower_limits[1],
+            'Coefficient_1_sup': upper_limits[1],
+            'R-squared': r_squared,
+            'P-value': p_value,
+            'Residuals Mean': residuals_mean,
+            'Durbin-Watson': dw_statistic, #Close to 2 no autocorrelation
+            'Breusch-Pagan': bp_test_pvalue,
+            'Shapiro': shapiro_test_pvalue
+        }
         
-    return Price_mat, S, betas, h_simulation, returns
+        # Append result dictionary to results list
+        results.append(result)
 
-def volatility(M,tau,beta,T_conv = 0.25,T_max = 5):
+    # Create a DataFrame from the results list
+    df_results = pd.DataFrame(results)
 
-    """Function that provides the volatility surface model
+    # Remove NaN values
+    cleaned_data = [x for x in correlation_time if not np.isnan(x)]
 
-        Parameters
-        ----------
-        M          : sigle value - Moneyness
-        tau        : single value - Time to maturity
-        beta       : numpy.ndarray - parameters
-        T_conv     : location of a fast convexity change in the IV term structure with respect to time to maturity
-        T_max      : single value - Maximal maturity represented by the model
+    # Compute mean
+    mean_value = np.mean(cleaned_data)
 
-        Returns
-        -------
-        volatility : Implied volatility
+    # Display the DataFrame
+    return  mean_value, df_results
 
-    """
-
-    Long_term_ATM_Level = beta[:,0]
-    Time_to_maturity_slope = beta[:,1]*np.exp(-1*np.sqrt(tau/T_conv))
-    M_plus = (M<0)*M
-    Moneyness_slope = (beta[:,2]*M)*(M>=0)+ (beta[:,2]*((np.exp(2*M_plus)-1)/(np.exp(2*M_plus)+1)))*(M<0)
-    Smile_attenuation = beta[:,3]*(1-np.exp(-1*(M**2)))*np.log(tau/T_max)
-    Smirk = (beta[:,4]*(1-np.exp((3*M_plus)**3))*np.log(tau/T_max))*(M<0)
-
-    volatility = np.maximum(Long_term_ATM_Level + Time_to_maturity_slope + Moneyness_slope + Smile_attenuation + Smirk,0.01)
-
-    return volatility
-
-
-def hedging_valuation_dataset(backtest, K, deltas, sigma, r = 0.009713920000000001, q = 0.01543706):
-
-    """
-    Input:
-    transacion_cost                   : Proportional transaction cost [0,1]
-    isput                             : Put or Call: {True,False}
-    K                                 : Strike of the option
-    Stock_paths                       : Underlying asset price
-    implied_volatility_simulation_1   : Implied volatility
-    deltas                            : Position in the underlying asset
-    close_limit_days                  : Number of days before maturity to close the position
-
-    Output:
-    hedging_portfolio                 : Portfolio value per path
-    hedging_error                     : Hedging error per time-step for all paths
-    hedging_error_limit               : Vector with hedging error at time we liquidate the position
-    cost_limit                        : Final transaction cost of the strategy
-    option_price                      : Option price matrix
-    df_statistic_TC                   : Transaction cost distributional statistics 
-    df_cost_functions                 : Loss function values
-
-    """
-
+def evaluation(model,deep_hedging,riskaversion,r,q,h,strike,hedging_strategy = "one_instrument", transaction_cost = 0, isput = False):
     
-    if sigma is None:
-        time_steps = deltas.shape[1]
-    else: 
-        time_steps = 252 # 63 or 252
-
+    #Change directory to load data
     owd = os.getcwd()
+    os.chdir(os.path.join(main_folder, f"data/processed/Training/"))
 
-    #first change dir to build_dir path
-    if backtest==True:
-        number_simulations = 296#10000 #296
-        os.chdir(os.path.join(main_folder, f"data/processed/Backtest/"))
-        _, S, betas, _, _ = load_standard_datasets(time_steps,sigma)
-        Stock_paths = S
-        betas_simulation = betas
-    else:
-        number_simulations = 100000
-        os.chdir(os.path.join(main_folder, f"data/processed/Training/"))
-        _, S, betas, _, _ = load_standard_datasets(time_steps,sigma)
-        Stock_paths = S[400000:,:]
-        betas_simulation = betas[400000:,:,:] if sigma is None else None
+    #Define hyperparameters of hedging valuation
+    new_evaluation  = strategy_hedging_valuation(hedging_strategy,transaction_cost,isput)
 
+    #Define general parameters
+    discount_factor = np.exp(-1*r*h)
+    divided_factor = np.exp(q*h)
+    df_summary = pd.DataFrame()
+    df_summary_risk = pd.DataFrame()
+    df_coefficients = pd.DataFrame()
+    
+    #Loading data
+    Stock_paths = np.load(os.path.join(f"Stock_paths__random_f_63_{model}.npy"))[400000:,:]
+    deltas = np.load(os.path.join(f"Deltas__random_f_63_{model}.npy"))
+    option_price = np.load(os.path.join(f"Option_price__random_f_63_{model}.npy"))
+
+    #Cleaning wrong simulations
+    rows = np.where(np.isnan(deltas).sum(axis=1)==0)[0]
+    Stock_paths = Stock_paths[rows,:]
+    deltas = deltas[rows,:]
+    hedging_error_limit_bs, cost_limit_bs, hedging_portfolio_bs = new_evaluation.hedging_error_vector(strike, Stock_paths, option_price, deltas)
+    hedging_error_limit_bs = -1*hedging_error_limit_bs
+
+    #Consider same rows for deep hedging strategy    
+    deep_hedging = deep_hedging[rows,:]
+
+    hedging_error_limit, cost_limit, hedging_portfolio = new_evaluation.hedging_error_vector(strike, Stock_paths, option_price, deep_hedging)
+    hedging_error_limit = -1*hedging_error_limit
+
+    #Statistical arbitrage
+    deltas_sa = deep_hedging-deltas
+    strategy_value = np.zeros(Stock_paths.shape[0])
+    for t in range(1,Stock_paths.shape[1]):
+        strategy_value += deltas_sa[:,t-1]*(Stock_paths[:,t]*(discount_factor**t)*divided_factor-Stock_paths[:,t-1]*(discount_factor**(t-1)))   
+    #strategy_value += option_price_1[0,0]
+    strategy_value = strategy_value/(discount_factor**63)
+    strategy_value_1 = -1*strategy_value
+    risk_metric = np.mean(np.sort(strategy_value_1)[int(riskaversion*strategy_value_1.shape[0]):])
+
+    #Targeted metrics
+    cvar_bs = np.mean(np.sort(hedging_error_limit_bs)[int(riskaversion*hedging_error_limit_bs.shape[0]):])
+    cvar_dh = np.mean(np.sort(hedging_error_limit)[int(riskaversion*hedging_error_limit.shape[0]):])
+
+    #Compute average correlation of the hedging strategies across all time steps
+    mean_value, df_results = regression_approach(deltas,deep_hedging)
+
+    df_coef = df_results.iloc[:,[0,1,2,3,4,5]].copy()
+    df_coef["Metrics"] = f"CVaR:{str(int(riskaversion*100))}%"
+    df_coef["Model"] = model
+    df_coefficients = pd.concat([df_coefficients, df_coef])
+
+    df_summary_aux = pd.DataFrame()
+    df_summary_aux["Strategy"] = [f"CVaR_{str(int(riskaversion*100))}"]
+    df_summary_aux["Market"] = [model]
+    df_summary_aux["Metric-CVaR"] = [cvar_dh]
+    df_summary_aux["Relative_CVaR"] = [cvar_dh/cvar_bs]
+    df_summary_aux["Avg correlation"] = [mean_value]
+    df_summary_aux['Avg R-squared'] = [df_results['R-squared'].mean()]
+    #df_summary_aux['Durbin-Watson'] = [df_results['Durbin-Watson'].mean()]
+    #df_summary_aux['Breusch-Pagan'] = [df_results['Breusch-Pagan'].mean()]
+    #df_summary_aux['Shapiro'] = [df_results['Shapiro'].mean()]
+    df_summary_aux["Option_price"] = [option_price]
+    df_summary_aux["CVaR_(DH-Delta)"] = [risk_metric]
+    df_summary_aux["Mean_(DH-Delta)"] = [np.mean(strategy_value)]
+
+    df_summary_risk = pd.concat([df_summary_risk, df_summary_aux])
+    
+    spread    = np.sqrt(((deltas-deep_hedging)**2).sum(axis=1))/np.sqrt(((deltas)**2).sum(axis=1))
+    df_summary_aux = pd.DataFrame()
+    df_summary_aux["Distance"] = spread
+    df_summary_aux["Risk measure"] = f"CVaR:{str(int(riskaversion*100))}%"
+    df_summary_aux["Market"] = model
+    df_summary = pd.concat([df_summary, df_summary_aux])
+    
+    #change dir back to original working directory (owd)
     os.chdir(owd)
-    if sigma is None:
-        implied_volatility_simulation = np.zeros([number_simulations,time_steps])
 
-        #Compute forward prices for all simulations
-        time_to_maturity_1 = np.array(sorted((np.arange(time_steps)+1),reverse=True))/252
-        interest_rates_difference = r - q
-        forward_price_1 = Stock_paths[:,:-1]*np.exp(time_to_maturity_1*interest_rates_difference)
-
-        #Compute Moneyness for all simulations
-        moneyness_1 = np.log(forward_price_1/K)*(1/np.sqrt(time_to_maturity_1))
-
-            
-        for time_step in range(time_steps+1):
-            if time_step < time_steps:
-                implied_volatility_simulation[:,time_step] = volatility(moneyness_1[:,time_step],time_to_maturity_1[time_step],betas_simulation[:,time_step,:])
-    else: 
-        implied_volatility_simulation = sigma
-
-    return Stock_paths, implied_volatility_simulation
-
-def hedging_valuation(backtest, strikes, deltas, transaction_cost, isput, close_limit_days, r, q, sigma = None):
-
-    Stock_paths, implied_volatility_simulation = hedging_valuation_dataset(backtest, strikes, deltas, sigma, r, q)
-    new_evaluation       = strategy_hedging_valuation(transaction_cost,isput,r,q)
-    hedging_portfolio, hedging_error, hedging_error_limit, cost_limit, option_price = new_evaluation.hedging_error_vector(strikes, Stock_paths, implied_volatility_simulation, deltas, None, None, close_limit_days)
-    df_statistic_TC   = statistics(cost_limit)
-    df_cost_functions = loss_functions(-1*hedging_error_limit)
-
-    df_cost_functions = pd.DataFrame(df_cost_functions)
-    df_cost_functions.index = ["Mean-HE","CVaR_95%","CVaR_99%","MSE","SMSE"]
-    df_cost_functions = df_cost_functions.T
-
-    return hedging_portfolio, hedging_error, hedging_error_limit, cost_limit, option_price, df_statistic_TC, df_cost_functions
-
-
-if __name__ == "__main__":
-    main()
+    return df_summary_risk
