@@ -84,37 +84,16 @@ class DeepAgent(object):
             self.payoff = tf.maximum(self.strike-self.unorm_price[-1,:,0],0)
 
         # 4) Network architechture for the deep hedging algorithm
-        if (self.network == "LSTM"):
-          # 4.1) Four LSTM cells (the dimension of the hidden state and the output is the same)
-          layer_1 = tf.compat.v1.keras.layers.LSTM(units  = self.nbs_units) 
-          layer_2 = tf.compat.v1.keras.layers.LSTM(units  = self.nbs_units)
-          layer_3 = tf.compat.v1.keras.layers.LSTM(units  = self.nbs_units)
-          layer_4 = tf.compat.v1.keras.layers.LSTM(units  = self.nbs_units)
-          # 4.2) Output layer of dimension nbs_assets (outputs the position in the hedging instruments)
-          layer_out = tf.layers.Dense(self.nbs_assets, None)
-        elif (self.network == "RNNFNN"):
-          # 4.1) Two LSTM cells (the dimension of the hidden state and the output is the same)
-          #      Two regular layers with RELU activation function and dropout regularization per layer
-          layer_1 = tf.compat.v1.keras.layers.LSTM(units  = self.nbs_units) 
-          layer_2 = tf.compat.v1.keras.layers.LSTM(units  = self.nbs_units)
-          layer_3 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
-          layer_drop_3 = tf.keras.layers.Dropout(self.dropout_par)
-          layer_4 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
-          layer_drop_4 = tf.keras.layers.Dropout(self.dropout_par)
-          # 4.2) Output layer of dimension nbs_assets (outputs the position in the hedging instruments)
-          layer_out = tf.layers.Dense(self.nbs_assets, None)
-        elif (self.network == "FFNN"):
-          # 4.1) Four regular layers with RELU activation function and dropout regularization per layer
-          layer_1 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
-          layer_drop_1 = tf.keras.layers.Dropout(self.dropout_par)
-          layer_2 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
-          layer_drop_2 = tf.keras.layers.Dropout(self.dropout_par)
-          layer_3 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
-          layer_drop_3 = tf.keras.layers.Dropout(self.dropout_par)
-          layer_4 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
-          layer_drop_4 = tf.keras.layers.Dropout(self.dropout_par)
-          # 4.2) Output layer of dimension one (outputs the position in the underlying)
-          layer_out = tf.layers.Dense(self.nbs_assets, None)
+        layer_1 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
+        layer_drop_1 = tf.keras.layers.Dropout(self.dropout_par)
+        layer_2 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
+        layer_drop_2 = tf.keras.layers.Dropout(self.dropout_par)
+        layer_3 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
+        layer_drop_3 = tf.keras.layers.Dropout(self.dropout_par)
+        layer_4 = tf.layers.Dense(self.nbs_units, tf.nn.relu)
+        layer_drop_4 = tf.keras.layers.Dropout(self.dropout_par)
+        # 4.2) Output layer of dimension one (outputs the position in the underlying)
+        layer_out = tf.layers.Dense(self.nbs_assets, None)
 
         # 4.3) Compute hedging strategies for all time-steps
         V_t = self.portfolio
@@ -130,43 +109,19 @@ class DeepAgent(object):
                 input_t = tf.concat([self.input[t,:,:], tf.expand_dims(V_t, axis = 1)], axis=1)
                 input_t = tf.concat([input_t, self.layer_prev], axis=1)
             elif self.state_space == "Reduced_1":
+                input_t = tf.concat([self.input[t,:,:], tf.expand_dims(V_t, axis = 1)], axis=1)
+            else:
                 input_t = tf.concat([self.input[t,:,:], self.layer_prev], axis=1)
-            else:
-                input_t = self.input[t,:,:]
 
-            if (self.network == "LSTM"):
-                # input of the LSTM cells at time 't': [S_t, T-t, V_t] with dimension [number of samples, time series dimension = 1 ,number of features]
-                input_t = tf.expand_dims(input_t, axis = 1)
-                # forward prop at time 't'
-                layer = layer_1(input_t)
-                layer = layer_2(tf.expand_dims(layer, axis = 1))
-                layer = layer_3(tf.expand_dims(layer, axis = 1))
-                layer = layer_4(tf.expand_dims(layer, axis = 1))
-                layer = layer_out(layer)
-
-            elif (self.network == "RNNFNN"):
-                 # input of the LSTM cells at time 't': [S_t, T-t, V_t] with dimension [number of samples, time series dimension = 1 ,number of features]
-                input_t = tf.expand_dims(input_t, axis = 1)
-                # forward prop at time 't'
-                layer = layer_1(input_t)
-                layer = layer_2(tf.expand_dims(layer, axis = 1))
-                layer = layer_3(layer)
-                layer = layer_drop_3(layer)
-                layer = layer_4(layer)
-                layer = layer_drop_4(layer)
-                layer = layer_out(layer)
-
-            else:
-                # forward prop at time 't'
-                layer = layer_1(input_t)
-                layer = layer_drop_1(layer)
-                layer = layer_2(layer)
-                layer = layer_drop_2(layer)
-                layer = layer_3(layer)
-                layer = layer_drop_3(layer)
-                layer = layer_4(layer)
-                layer = layer_drop_4(layer)
-                layer = layer_out(layer)
+            layer = layer_1(input_t)
+            layer = layer_drop_1(layer)
+            layer = layer_2(layer)
+            layer = layer_drop_2(layer)
+            layer = layer_3(layer)
+            layer = layer_drop_3(layer)
+            layer = layer_4(layer)
+            layer = layer_drop_4(layer)
+            layer = layer_out(layer)
             
             #Output layer with constraints
             if (t==0):
@@ -224,8 +179,7 @@ class DeepAgent(object):
 
         # 6) Compute hedging errors for each path      
         self.hedging_err = self.payoff - V_t
-
-                                           
+               
         # 7) Compute the loss function on the batch of hedging error
         # - This is the empirical cost functions estimated with a mini-batch
         if (self.loss_type == "CVaR"):
@@ -527,11 +481,6 @@ dividend_batch, transacion_cost, riskaversion, paths_valid, epochs, display_plot
         else:
             name = f"{model}_{network}_{state_space}_dropout_{str(int(dropout_par*100))}_{loss_type}_TC_{ str(transacion_cost*100)}_{option}_{moneyness}_{cash_constraint_name}"
 
-        #Re-defining the input based on the state space
-        paths = paths if state_space=="Full" else paths[:,:,[0,1,2,3,4,5,6,12]]
-        paths_valid = paths_valid if state_space=="Full" else paths_valid[:,:,[0,1,2,3,4,5,6,12]]
-        nbs_input       = paths.shape[2]
-
         # Compile the neural network
         rl_network = DeepAgent(network, state_space, nbs_point_traj, batch_size, nbs_input, nbs_units, nbs_assets, cash_constraint, constraint_max, loss_type, lr, dropout_par, isput, prepro_stock, name)
 
@@ -617,11 +566,6 @@ dividend_batch, transacion_cost, riskaversion, paths_valid, epochs, display_plot
         else:
             name = f"{model}_{network}_{state_space}_dropout_{str(int(dropout_par*100))}_{loss_type}_TC_{ str(transacion_cost*100)}_{option}_{moneyness}_{cash_constraint_name}"
 
-        #Re-defining the input based on the state space
-        paths = paths if state_space=="Full" else paths[:,:,[0,1,2,3,4,5,6,12]]
-        paths_valid = paths_valid if state_space=="Full" else paths_valid[:,:,[0,1,2,3,4,5,6,12]]
-        nbs_input       = paths.shape[2]
-
         # Compile the neural network
         rl_network = DeepAgent(network, state_space, nbs_point_traj, batch_size, nbs_input, nbs_units, nbs_assets, cash_constraint, constraint_max, loss_type, lr, dropout_par, isput, prepro_stock, name)
 
@@ -705,10 +649,6 @@ dividend_batch, transacion_cost, riskaversion, paths_valid, option, moneyness, i
         name = f"{model}_{network}_{state_space}_dropout_{str(int(dropout_par*100))}_{loss_type}_{str(int(riskaversion))}_TC_{ str(transacion_cost*100)}_{option}_{moneyness}_{cash_constraint_name}"
     else:
         name = f"{model}_{network}_{state_space}_dropout_{str(int(dropout_par*100))}_{loss_type}_TC_{ str(transacion_cost*100)}_{option}_{moneyness}_{cash_constraint_name}"
-
-    #Re-defining the input based on the state space
-    paths_valid = paths_valid if state_space=="Full" else paths_valid[:,:,[0,1,2,3,4,5,6,12]]
-    nbs_input   = paths_valid.shape[2]
 
     # Compile the neural network
     rl_network = DeepAgent(network, state_space, nbs_point_traj, batch_size, nbs_input, nbs_units, nbs_assets, cash_constraint, constraint_max, loss_type, lr, dropout_par, isput, prepro_stock, name)

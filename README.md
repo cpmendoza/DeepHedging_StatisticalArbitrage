@@ -1,20 +1,19 @@
-## Enhancing deep hedging of options with implied volatility surface feedback information
+## The difference between deep hedging and delta hedging is not statistical arbitrage
 
-This repository contains the deep hedging environment used in our paper, François et al. (2024), where we develop a dynamic hedging scheme for equity options that integrates information from a set of risk factors characterizing the implied volatility surface dynamics. We employ deep policy gradient-type reinforcement learning (RL) algorithm. The repository consists of two main components:
+This repository contains the deep hedging environment used in our paper, François et al. (2024), where we observe that the difference between deep hedging and delta hedging is not always statistical arbitrage. We employ deep policy gradient-type reinforcement learning (RL) algorithm. The repository consists of two main components:
 
-- Component 1: Environment generation based on the data-driven simulator JIVR introduced by François et al. (2023).
+- Component 1: Environment generation based on three market simulators: discrete version of Black-Scholes market, GARCH dynamics and GJR-GARCH dynamics.
 - Component 2: Implementation of the RL agent to hedge European options.
 
 ## Short description
 
 1. The environment simulators, component 1, are contained in the `src/features/` folder. 
 
-    - `nig_simulation.py` simulates NIG random vectors based on the joint distribution of the JIVR random component. This simulation incorporates the estimation conducted using real market data, as detailed in François et al. (2022).
-    - `jivr_simulation.py` simulates the JIVR environment, including underlying stock returns, volatility, and risk factors that characterize the implied volatility surface dynamics. Further theoretical simulation details can be found in François et al. (2024).
+    - `features_simulation.py` simulates the RL environment, including underlying stock returns, volatility, and risk factors that characterize the state space. Further theoretical simulation details can be found in in our paper.
 
 2. Deep RL model, component 2, is contained in the `src/models/` folder. 
 
-    - `deep_rl_agent.py` contains all model functionalities through a python class that trains and assesses the performance of RL agents based on the non-standard RNN-FNN architecture outlined in our paper.
+    - `deep_rl_agent.py` contains all model functionalities through a python class that trains and assesses the performance of RL agents based on a standard FFNN.
 
 Examples showcasing the utilization of the pipeline can be observed in the notebooks directory.
 The Python script (.py file) for executing the pipeline from the terminal can be found in the pipeline directory.
@@ -30,8 +29,8 @@ The Python script (.py file) for executing the pipeline from the terminal can be
 - Clone the project repository:
 
 ```nohighlight
-git clone https://github.com/OctavioPM/DeepHedging_JIVR.git
-cd DeepHedging_JIVR
+git clone https://github.com/OctavioPM/DeepHedging_StatisticalArbitrage.git
+cd DeepHedging_StatisticalArbitrage
 ```
 
 - Create and activate a virtual environment:
@@ -58,7 +57,7 @@ pip install -r requirements.txt
 
 4. **Running the script**: We provide two options to run the deep hedging JIVR pipeline:
 
-- Option 1. The two main components of the pipeline can be executed independently following the example `deep_hedging_pipeline.ipynb` included in the `notebooks` folder. This notebook alredy outlines RL-CVaR agent performance metrics considered in Table 1 of our paper François et al. (2024).
+- Option 1. The two main components of the pipeline can be executed independently following the example `deep_hedging_pipeline.ipynb` included in the `notebooks` folder. This notebook alredy outlines the performance metrics shown in Table 1 of our paper François et al. (2024) for the RL-CVaR agent under Black-Scholes dynamics.
 
 - Option 2. The final pipeline can be executed from the terminal by using the following command in the `pipeline` folder: 
 
@@ -75,9 +74,9 @@ python -m pipeline
 ├── cfgs                        <- Configuration files for environment simulation and RL model parameters.
 │
 ├── data
-│   ├── raw                     <- Historical estimated parameters of the JIVR model.
+│   ├── raw                     <- Historical estimated parameters of the S\&P 500 index.
 │   ├── interim                 <- NIG data simulation for market dynamics simulation.
-│   ├── processed               <- Simulated JIVR markets dynamics.
+│   ├── processed               <- Simulated markets dynamics.
 │   └── results                 <- Deep hedging strategies (RL sgents output).
 │
 ├── notebooks                   <- Jupyter notebook with pipeline example.
@@ -92,8 +91,7 @@ python -m pipeline
 │   │   └── data_loader.py         <- Script to transform data into the right format for the models.
 │   │
 │   ├── features                   <- Scripts to generate market environment.
-│   │   ├── jivr_simulation.py     <- Script to generate JIVR model features.
-│   │   └── nig_simulation.py      <- Script to generate NIG random variables simulation.
+│   │   └── features_simulation.py <- Script to generate state space.
 │   │
 │   ├── models                     <- Scripts to train models and then use trained models to make
 │   │   │                             hedging strategies.

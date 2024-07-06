@@ -26,7 +26,6 @@ from scipy.stats import norm
 from arch import arch_model
 from tqdm import tqdm
 
-
 class market_simulator(object):
     
     """Class to the implied volatility surface model, recalibrate it, and use it to predict future dynamics
