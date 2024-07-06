@@ -75,7 +75,7 @@ python -m pipeline
 │
 ├── data
 │   ├── raw                     <- Historical estimated parameters of the S\&P 500 index.
-│   ├── interim                 <- NIG data simulation for market dynamics simulation.
+│   ├── interim                 <- Temporary data used during simulation.
 │   ├── processed               <- Simulated markets dynamics.
 │   └── results                 <- Deep hedging strategies (RL sgents output).
 │
