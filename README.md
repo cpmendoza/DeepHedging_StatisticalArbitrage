@@ -99,7 +99,7 @@ python deep_hedging_pipeline.py
 │   │   └── deep_rl_training.py    <- Script to fit and make inference.
 │   │
 │   ├── visualization              <- Scripts to compute performance metrics of the models.
-│   │   └── strategy_evalution.py  <- Scripts to compute performance metrics and statisctical arbitrage test.
+│   │   └── strategy_evalution.py  <- Scripts to compute performance metrics.
 │   │
 │   └── utils.py                   <- data utility for configuration files.
 │ 
