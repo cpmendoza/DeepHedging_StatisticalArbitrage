@@ -1,4 +1,4 @@
-## The difference between deep hedging and delta hedging is not statistical arbitrage
+## Is the difference between deep hedging and delta hedging a statistical arbitrage?
 
 This repository contains the deep hedging environment used in our paper, François et al. (2024), where we observe that the difference between deep hedging and delta hedging is not always statistical arbitrage. We employ deep policy gradient-type reinforcement learning (RL) algorithm. The repository consists of two main components:
 

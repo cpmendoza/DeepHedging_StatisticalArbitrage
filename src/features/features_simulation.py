@@ -176,6 +176,8 @@ class market_simulator(object):
             z = np.random.normal(0, 1, self.simulations)
             last_residual = np.sqrt(initial_variance) * z
 
+            #print(mu, omega, alpha_1, beta_1, gamma_1)
+
             # Simulate paths
             returns, conditional_variance = self.gjr_garch_simulation(mu, omega, alpha_1, beta_1, gamma_1, initial_return, initial_variance, last_residual, self.simulations, self.time_steps)
 
