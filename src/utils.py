@@ -30,7 +30,7 @@ class garch_neutral_dynamics(object):
 
         # Parameters
         self.r = r/252          #Daily risk-free rate
-        self.q = 0.01772245     #Daily dividend yield
+        self.q = 0.01772245/252     #Daily dividend yield
         self.mu = mu            #GARCH model parameter
         self.omega = omega      #GARCH model parameter
         self.alpha_1 = alpha_1  #GARCH model parameter
