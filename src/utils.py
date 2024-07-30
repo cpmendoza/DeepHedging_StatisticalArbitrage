@@ -30,6 +30,7 @@ class garch_neutral_dynamics(object):
 
         # Parameters
         self.r = r/252          #Daily risk-free rate
+        self.q = 0.01772245     #Daily dividend yield
         self.mu = mu            #GARCH model parameter
         self.omega = omega      #GARCH model parameter
         self.alpha_1 = alpha_1  #GARCH model parameter
@@ -61,7 +62,7 @@ class garch_neutral_dynamics(object):
         conditional_variance[:, 0] = initial_variance
 
         #New residual - risk free measure
-        nabla_t = (self.mu-self.r+initial_variance/2)/np.sqrt(initial_variance)
+        nabla_t = (self.mu-self.r+self.q+initial_variance/2)/np.sqrt(initial_variance)
         #generate modify shocks considering the risk netural measure
         z_t = np.random.normal(0, 1, num_paths)-nabla_t
         #residual 
@@ -73,7 +74,7 @@ class garch_neutral_dynamics(object):
             # Calculate conditional variance
             conditional_variance[:, t] = self.omega + (self.alpha_1 + self.gamma_1 * indicator) * (last_residual**2) + self.beta_1 * conditional_variance[:, t-1]
             # Generate standardized random shocks
-            nabla_t = (self.mu-self.r+conditional_variance[:, t]/2)/np.sqrt(conditional_variance[:, t])
+            nabla_t = (self.mu-self.r+self.q+conditional_variance[:, t]/2)/np.sqrt(conditional_variance[:, t])
             z_t = np.random.normal(0, 1, num_paths)-nabla_t
             # Noise 
             last_residual = np.sqrt(conditional_variance[:, t]) * z_t
